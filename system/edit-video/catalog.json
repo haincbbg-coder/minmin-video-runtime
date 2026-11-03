@@ -1,0 +1,131 @@
+{
+  "format_version": 1,
+  "components": [
+    {
+      "id": "01-remotion-skills",
+      "repo": "remotion-dev/skills",
+      "commit": "30d4553ecd46fbc5212fd0ff006ae43af522158b",
+      "description": "Skill Remotion cho Claude/AI agent",
+      "npm": null
+    },
+    {
+      "id": "02-gsap-skills",
+      "repo": "greensock/gsap-skills",
+      "commit": "aed9cfd3277740755f6bfc1155c7aa645403b760",
+      "description": "Skill GSAP cho Claude/AI agent",
+      "npm": null
+    },
+    {
+      "id": "03-svgo",
+      "repo": "svg/svgo",
+      "commit": "7b0c68659bcd687de2387578eebe7ad6b834ab7c",
+      "description": "Làm gọn, nén file SVG",
+      "npm": "svgo"
+    },
+    {
+      "id": "04-satori",
+      "repo": "vercel/satori",
+      "commit": "074f0b38ed0f5d8fa768f709c0bb072b2d6c99e1",
+      "description": "Biến HTML/CSS (JSX) thành ảnh: thumbnail, ảnh bìa",
+      "npm": "satori"
+    },
+    {
+      "id": "05-gsap",
+      "repo": "greensock/GSAP",
+      "commit": "13e2b790546426a1a2e0e9b409f3f8dc6d6611f2",
+      "description": "Timeline chuyển động 2D (có sẵn dist/)",
+      "npm": "gsap"
+    },
+    {
+      "id": "06-anime",
+      "repo": "juliangarnier/anime",
+      "commit": "01b81be1df6843ccfe0a71c0699a746bf740dd77",
+      "description": "Vẽ nét SVG, chuyển động nhẹ",
+      "npm": "animejs"
+    },
+    {
+      "id": "07-motion",
+      "repo": "motiondivision/motion",
+      "commit": "494d7b452587843bad1ba2fde92fb0dc63000e63",
+      "description": "Chuyển động giao diện React",
+      "npm": "motion"
+    },
+    {
+      "id": "08-dotlottie-web",
+      "repo": "LottieFiles/dotlottie-web",
+      "commit": "ea7250c81e4142f1becbd75f6b0a567d8b0d2e66",
+      "description": "Phát hoạt hình Lottie làm sẵn",
+      "npm": "@lottiefiles/dotlottie-web"
+    },
+    {
+      "id": "09-remotion",
+      "repo": "remotion-dev/remotion",
+      "commit": "3b7e7008a495094424859e9cf4f66f4844d2dfd9",
+      "description": "Dựng video bằng React, render MP4",
+      "npm": "remotion"
+    },
+    {
+      "id": "10-motion-canvas",
+      "repo": "motion-canvas/motion-canvas",
+      "commit": "7b91435c301d530351dcf5ebb91dd139c002e405",
+      "description": "Video giảng bài: sơ đồ khớp lời đọc",
+      "npm": "@motion-canvas/core"
+    },
+    {
+      "id": "11-three.js",
+      "repo": "mrdoob/three.js",
+      "commit": "42cfe243e0ad7316179e12e3d0098ee98b0f525f",
+      "description": "Cảnh 3D trong trình duyệt",
+      "npm": "three"
+    },
+    {
+      "id": "12-react-three-fiber",
+      "repo": "pmndrs/react-three-fiber",
+      "commit": "d74622ea8ed717f7212d7e19d65ff3e325508389",
+      "description": "Dựng cảnh Three.js bằng React",
+      "npm": "@react-three/fiber"
+    },
+    {
+      "id": "13-drei",
+      "repo": "pmndrs/drei",
+      "commit": "bf6f4addf47467d3885de272d94ca5127f6ef68f",
+      "description": "Đạo cụ cho R3F: camera, chữ 3D, đèn",
+      "npm": "@react-three/drei"
+    },
+    {
+      "id": "14-rapier",
+      "repo": "dimforge/rapier",
+      "commit": "475caa3ff4646fd9a796b67d14116256f4962bc7",
+      "description": "Vật lý: rơi, va chạm (Rust)",
+      "npm": "@dimforge/rapier3d-compat"
+    },
+    {
+      "id": "15-postprocessing",
+      "repo": "pmndrs/postprocessing",
+      "commit": "9cf03cff26615636a564d8bfddf765edb8917441",
+      "description": "Hậu kỳ 3D: bloom, xoá phông, màu",
+      "npm": "postprocessing"
+    },
+    {
+      "id": "16-howler.js",
+      "repo": "goldfire/howler.js",
+      "commit": "1d3053576a860e9854645493ad6c4a72c6cc6e45",
+      "description": "Nhạc nền, tiếng động trong trình duyệt",
+      "npm": "howler"
+    },
+    {
+      "id": "17-mediabunny",
+      "repo": "Vanilagy/mediabunny",
+      "commit": "49659046dfe8168b95386a6d41b531721ae53611",
+      "description": "Đọc/ghi/xuất MP4 trong trình duyệt",
+      "npm": "mediabunny"
+    },
+    {
+      "id": "18-ffmpeg",
+      "repo": "FFmpeg/FFmpeg",
+      "commit": "44537e795f0b99ca0b96710d27f052628cea08e1",
+      "description": "Mã nguồn tham khảo (bản chạy tải riêng)",
+      "npm": null
+    }
+  ]
+}

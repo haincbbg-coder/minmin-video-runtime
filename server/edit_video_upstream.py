@@ -116,7 +116,8 @@ def assemble(root, assets, target, download, cache):
             if not executable:
                 raise ValueError("Linux cần dpkg-deb để giải gói Concat (có sẵn trong bản Docker MinMin)")
             subprocess.run([executable, "-x", str(path), str(root / "concat")],
-                           check=True, timeout=180, capture_output=True)
+                           check=True, timeout=180, capture_output=True,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         else:
             dest = root / "bin"
             dest.mkdir(exist_ok=True)

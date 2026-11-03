@@ -7,6 +7,7 @@ in catalog.json, with runtime package versions recorded separately in runtime.js
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -62,7 +63,11 @@ def pack_runtime(root, archive):
             rel = path.relative_to(root)
             if rel.parts[0] == "concat" or (rel.parts[0] == "bin" and path.stem in {"ffmpeg", "ffprobe"}):
                 continue
-            if rel.parts[0] == "browsers" and len(rel.parts) > 1 and rel.parts[1].startswith(("chromium-", "ffmpeg-")):
+            if rel.parts[0] == "browsers":
+                continue
+            if len(rel.parts) > 2 and rel.parts[0] == "node_modules" and (
+                rel.parts[1] in {"@ffmpeg-installer", "@ffprobe-installer"} and rel.parts[2] != "ffmpeg" and rel.parts[2] != "ffprobe"
+                or rel.parts[1] == "@remotion" and rel.parts[2].startswith("compositor-")):
                 continue
             if "__pycache__" in rel.parts or "smoke-" in rel.parts[0]:
                 continue
@@ -87,11 +92,12 @@ def main():
     root.mkdir(exist_ok=args.resume)
     cache = out / ("downloads-" + target)
     cache.mkdir(exist_ok=args.resume)
-    provenance, upstream = [], []
+    provenance, upstream, source_files = [], [], {}
     def get(url, name):
         path = cache / name
         digest = hashlib.sha256(path.read_bytes()).hexdigest() if args.resume and path.exists() else fetch(url, path)
         provenance.append({"url": url, "sha256": digest, "bytes": path.stat().st_size})
+        source_files[url] = path
         return path
 
     catalog = json.loads((REPO / "system/edit-video/catalog.json").read_text("utf-8"))
@@ -104,6 +110,17 @@ def main():
     # Only esbuild has a build helper; do not execute lifecycle scripts from
     # every dependency in this large toolset.
     run(["node", "node_modules/esbuild/install.js"], root)
+    lock = json.loads((root / "package-lock.json").read_text("utf-8"))
+    for package in sorted(edit_video_upstream.NATIVE[target]):
+        pkg = root / "node_modules" / package / "package.json"
+        if not pkg.exists(): continue
+        data = json.loads(pkg.read_text("utf-8"))
+        locked = lock["packages"]["node_modules/" + package]
+        archive = get(locked["resolved"], package.replace("/", "-") + ".tgz")
+        integrity = "sha512-" + base64.b64encode(hashlib.sha512(archive.read_bytes()).digest()).decode()
+        if locked["integrity"] != integrity: raise ValueError("Npm native integrity mismatch")
+        upstream.append({"kind": "npm-native", "package": package, "version": data["version"],
+                         "url": locked["resolved"], "size": archive.stat().st_size, "sha256": provenance[-1]["sha256"]})
     node = Path(shutil.which("node")).resolve()
     (root / "bin").mkdir(exist_ok=True)
     node_dest = root / "bin" / ("node.exe" if os.name == "nt" else "node")
@@ -215,6 +232,13 @@ def main():
 
     env = dict(os.environ, PLAYWRIGHT_BROWSERS_PATH=str(root / "browsers"))
     run([str(node), "node_modules/playwright/cli.js", "install", "chromium", "--only-shell"], root, env)
+    browser_data = json.loads((root / "node_modules/playwright-core/browsers.json").read_text("utf-8"))
+    browser = next(b for b in browser_data["browsers"] if b["name"] == "chromium-headless-shell")
+    browser_target = "win64" if os.name == "nt" else "linux64"
+    browser_url = f'https://cdn.playwright.dev/builds/cft/{browser["browserVersion"]}/{browser_target}/chrome-headless-shell-{browser_target}.zip'
+    browser_archive = get(browser_url, "chrome-headless-shell.zip")
+    upstream.append({"kind": "browser-zip", "directory": "chromium_headless_shell-" + browser["revision"],
+                     "url": browser_url, "size": browser_archive.stat().st_size, "sha256": provenance[-1]["sha256"]})
     imports = ["svgo/browser" if c["npm"] == "svgo" else c["npm"] for c in catalog["components"] if c["npm"]]
     # Browser-only libraries are tested in Chromium, not falsely marked as
     # broken because they reference document/window when imported in Node.
@@ -227,13 +251,13 @@ def main():
     run([str(node_dest), "verify.mjs"], root, env)
     archive_name = f"edit-video-full-{args.version}-{target}"
     archive = out / (archive_name + ".zip")
+    (root / "provenance.json").write_text(json.dumps(provenance, indent=2), "utf-8")
     pack_runtime(root, archive)
     edit_video_upstream.validate(upstream, target)
     # Test the exact customer assembly, not just the publisher's pre-pack folder.
     # Cache hits still validate size/hash and never change the pinned upstream URL.
     def cached_download(url, dest, size, digest, **kwargs):
-        candidates = {ffurl: ff, concat_url: msi if os.name == "nt" else deb}
-        src = candidates[url]
+        src = source_files[url]
         if src.stat().st_size != size or hashlib.sha256(src.read_bytes()).hexdigest() != digest:
             raise ValueError("Upstream cache checksum mismatch")
         shutil.copyfile(src, dest)

@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -72,6 +73,8 @@ def main():
     parser.add_argument("--concat-version", default="0.2.8")
     parser.add_argument("--resume", action="store_true", help="Reuse this builder's downloaded files")
     args = parser.parse_args()
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,60}", args.version):
+        raise SystemExit("Invalid release version")
     target = platform.system().lower() + "-x64"
     if platform.machine().lower() not in {"amd64", "x86_64"} or target not in {"windows-x64", "linux-x64"}:
         raise SystemExit("This builder currently supports Windows x64 and Linux x64")
@@ -196,7 +199,8 @@ def main():
     code += "\nwindow.__MINMIN_MODULES=[" + ",".join(f"m{i}" for i in range(len(imports))) + "];"
     code += f"\nwindow.__MINMIN_COMPONENT_COUNT={len(imports)};window.__MINMIN_COMPONENTS_READY=true;"
     (root / "smoke-entry.js").write_text(code, "utf-8")
-    run([str(node), "node_modules/esbuild/bin/esbuild", "smoke-entry.js", "--bundle", "--platform=browser", "--outfile=smoke.js"], root)
+    run([str(node), "--input-type=module", "-e",
+         "import {build} from 'esbuild'; await build({entryPoints:['smoke-entry.js'],bundle:true,platform:'browser',outfile:'smoke.js'});"], root)
     run([str(node_dest), "verify.mjs"], root, env)
     archive_name = f"edit-video-full-{args.version}-{target}"
     archive = out / (archive_name + ".zip")

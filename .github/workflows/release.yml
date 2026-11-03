@@ -69,9 +69,9 @@ jobs:
                           platforms={e['platform']: e['asset'] for e in entries})
           (root/'manifest.json').write_text(json.dumps(manifest, indent=2))
           PY
-      - name: Create draft for final source/licence review
+      - name: Create draft for final installation review
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ inputs.version }}
         run: |
-          gh release create "$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --draft --title "Edit Video Full $RELEASE_VERSION" --notes "Optional MinMin video runtime. Contains 18 components plus unmodified Concat. Review notices and corresponding-source distribution before publishing." dist/edit-video-full-*.zip dist/Concat-*-source.zip dist/manifest.json
+          gh release create "$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --draft --title "Edit Video Full $RELEASE_VERSION" --notes "Optional MinMin video runtime. One-click installation assembles all 18 components. Concat and FFmpeg binaries are downloaded directly by each customer from their original upstream releases, with pinned SHA-256 checks; they are excluded from MinMin ZIPs. Clean-runner tests verify the exact customer assembly and actual MP4 exports. See package notices and manifest for source URLs." dist/edit-video-full-*.zip dist/Concat-*-source.zip dist/manifest.json

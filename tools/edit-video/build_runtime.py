@@ -62,7 +62,7 @@ def pack_runtime(root, archive):
             rel = path.relative_to(root)
             if rel.parts[0] == "concat" or (rel.parts[0] == "bin" and path.stem in {"ffmpeg", "ffprobe"}):
                 continue
-            if rel.parts[0] == "browsers" and len(rel.parts) > 1 and rel.parts[1].startswith("chromium-"):
+            if rel.parts[0] == "browsers" and len(rel.parts) > 1 and rel.parts[1].startswith(("chromium-", "ffmpeg-")):
                 continue
             if "__pycache__" in rel.parts or "smoke-" in rel.parts[0]:
                 continue

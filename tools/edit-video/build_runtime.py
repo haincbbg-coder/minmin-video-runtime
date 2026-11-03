@@ -168,7 +168,9 @@ def main():
     else:
         deb = get(release_url + f"Concat-{v}-linux-x86_64.deb", "concat.deb")
         run(["dpkg-deb", "-x", str(deb), str(concat)])
-        binary = concat / "usr/bin/concat"
+        # The /usr/bin entry is a distro wrapper with an absolute /opt path.
+        # The actual portable binary has origin-relative library paths.
+        binary = concat / "opt/concat/concat"
     executables["concat"] = binary.relative_to(root).as_posix()
     # Ship corresponding source separately, linked in notices and release assets.
     source = get(f"https://github.com/jub0t/Concat/archive/refs/tags/v{v}.zip", "concat-source.zip")

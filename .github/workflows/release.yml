@@ -1,0 +1,77 @@
+name: Build Edit Video Full
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release tag (for example v0.1.0)
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libvulkan1 libfontconfig1 libxcb1 libxkbcommon0
+          npx --yes playwright@1.64.1 install-deps chromium
+      - name: Build all 18 components and test an actual MP4
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: python tools/edit-video/build_runtime.py --version "$env:RELEASE_VERSION" --output dist
+        shell: pwsh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runtime-${{ runner.os }}
+          path: |
+            dist/edit-video-full-*.zip
+            dist/*-x64.json
+            dist/Concat-*-source.zip
+          retention-days: 14
+  draft-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Assemble publisher manifest
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          python - <<'PY'
+          import json, os, pathlib
+          root = pathlib.Path('dist')
+          entries = [json.loads(p.read_text()) for p in root.glob('*-x64.json')]
+          assert len(entries) == 2
+          for e in entries:
+              assert e['version'] == os.environ['RELEASE_VERSION']
+              assert len(e['components']) == 18
+          manifest = dict(format='minmin-edit-video', format_version=1,
+                          version=os.environ['RELEASE_VERSION'], components=entries[0]['components'],
+                          platforms={e['platform']: e['asset'] for e in entries})
+          (root/'manifest.json').write_text(json.dumps(manifest, indent=2))
+          PY
+      - name: Create draft for final source/licence review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          gh release create "$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --draft --title "Edit Video Full $RELEASE_VERSION" --notes "Optional MinMin video runtime. Contains 18 components plus unmodified Concat. Review notices and corresponding-source distribution before publishing." dist/edit-video-full-*.zip dist/Concat-*-source.zip dist/manifest.json

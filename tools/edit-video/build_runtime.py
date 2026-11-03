@@ -16,12 +16,15 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import urllib.request
 import zipfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
+sys.path.insert(0, str(REPO / "server"))
+import edit_video_upstream
 
 
 def fetch(url, dest):
@@ -57,7 +60,7 @@ def pack_runtime(root, archive):
             if not path.is_file():
                 continue
             rel = path.relative_to(root)
-            if rel.parts[0] == "concat" and path.suffix.lower() == ".msi":
+            if rel.parts[0] == "concat" or (rel.parts[0] == "bin" and path.stem in {"ffmpeg", "ffprobe"}):
                 continue
             if rel.parts[0] == "browsers" and len(rel.parts) > 1 and rel.parts[1].startswith("chromium-"):
                 continue
@@ -84,7 +87,7 @@ def main():
     root.mkdir(exist_ok=args.resume)
     cache = out / ("downloads-" + target)
     cache.mkdir(exist_ok=args.resume)
-    provenance = []
+    provenance, upstream = [], []
     def get(url, name):
         path = cache / name
         digest = hashlib.sha256(path.read_bytes()).hexdigest() if args.resume and path.exists() else fetch(url, path)
@@ -136,9 +139,18 @@ def main():
 
     # FFmpeg portable distribution. This build input is recorded by hash in the
     # provenance file; release checksums bind the resulting installer bytes.
-    ffurl = ("https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
-             if os.name == "nt" else "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz")
+    # Monthly upstream releases are retained for two years; avoid the floating
+    # latest URL and short-lived daily builds for customer installs.
+    ffbase = "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-31-12-59/"
+    ffurl = ffbase + ("ffmpeg-N-128227-g4811625b5f-win64-gpl.zip" if os.name == "nt"
+                      else "ffmpeg-N-128227-g4811625b5f-linux64-gpl.tar.xz")
     ff = get(ffurl, "ffmpeg.zip" if os.name == "nt" else "ffmpeg.tar.xz")
+    expected_ff = ("3a5cdb3b83dd1b62b29d946d3655a14d787e5e81d947ad68202a1a400095d2f8" if os.name == "nt"
+                   else "67929be39bbb696f41d3295686597a439aeac902f61d82be660ccc1453c1fdfb")
+    if provenance[-1]["sha256"] != expected_ff:
+        raise ValueError("Pinned FFmpeg archive checksum mismatch")
+    upstream.append({"kind": "ffmpeg-zip" if os.name == "nt" else "ffmpeg-tar",
+                     "url": ffurl, "size": ff.stat().st_size, "sha256": provenance[-1]["sha256"]})
     if os.name == "nt":
         with zipfile.ZipFile(ff) as z:
             for name in ("ffmpeg", "ffprobe"):
@@ -162,11 +174,17 @@ def main():
     concat.mkdir(exist_ok=True)
     release_url = f"https://github.com/jub0t/Concat/releases/download/v{v}/"
     if os.name == "nt":
-        msi = get(release_url + f"Concat-{v}-windows-x86_64.msi", "concat.msi")
+        concat_url = release_url + f"Concat-{v}-windows-x86_64.msi"
+        msi = get(concat_url, "concat.msi")
+        upstream.append({"kind": "concat-msi", "url": concat_url, "size": msi.stat().st_size,
+                         "sha256": provenance[-1]["sha256"]})
         run(["msiexec.exe", "/a", str(msi), "/qn", "TARGETDIR=" + str(concat)])
         binary = next(concat.rglob("concat.exe"))
     else:
-        deb = get(release_url + f"Concat-{v}-linux-x86_64.deb", "concat.deb")
+        concat_url = release_url + f"Concat-{v}-linux-x86_64.deb"
+        deb = get(concat_url, "concat.deb")
+        upstream.append({"kind": "concat-deb", "url": concat_url, "size": deb.stat().st_size,
+                         "sha256": provenance[-1]["sha256"]})
         run(["dpkg-deb", "-x", str(deb), str(concat)])
         # The /usr/bin entry is a distro wrapper with an absolute /opt path.
         # The actual portable binary has origin-relative library paths.
@@ -182,7 +200,10 @@ def main():
         "MinMin uses unmodified Concat as a separate executable through MCP.\n"
         f"Concat {v}: https://github.com/jub0t/Concat/tree/v{v}\n"
         "Licence: AGPL-3.0-or-later. Corresponding source is a separate release asset.\n"
-        "FFmpeg GPL build: https://github.com/BtbN/FFmpeg-Builds (build recipes and source links).\n"
+        "Concat and FFmpeg binaries are NOT included in the MinMin download ZIP.\n"
+        "The installer obtains original archives directly from their upstream release repositories,\n"
+        "checks their pinned SHA-256 hashes, and extracts them locally.\n"
+        "FFmpeg upstream: https://github.com/BtbN/FFmpeg-Builds (build recipes and source links).\n"
         "Each npm package retains its own license in node_modules. Refer to provenance.json and package-lock.json.\n"
         "Original Motion Video Director and the collected audio library are NOT redistributed.\n", "utf-8")
     metadata = {"version": args.version, "platform": target, "executables": executables,
@@ -207,8 +228,29 @@ def main():
     archive_name = f"edit-video-full-{args.version}-{target}"
     archive = out / (archive_name + ".zip")
     pack_runtime(root, archive)
+    edit_video_upstream.validate(upstream, target)
+    # Test the exact customer assembly, not just the publisher's pre-pack folder.
+    # Cache hits still validate size/hash and never change the pinned upstream URL.
+    def cached_download(url, dest, size, digest, **kwargs):
+        candidates = {ffurl: ff, concat_url: msi if os.name == "nt" else deb}
+        src = candidates[url]
+        if src.stat().st_size != size or hashlib.sha256(src.read_bytes()).hexdigest() != digest:
+            raise ValueError("Upstream cache checksum mismatch")
+        shutil.copyfile(src, dest)
+        return size
+    with tempfile.TemporaryDirectory(prefix="customer-install-", dir=out) as temporary:
+        installed = Path(temporary) / "runtime"
+        with zipfile.ZipFile(archive) as z:
+            z.extractall(installed)
+            if os.name != "nt":
+                for item in z.infolist():
+                    if not item.is_dir():
+                        (installed / item.filename).chmod(0o755 if (item.external_attr >> 16) & 0o111 else 0o644)
+        edit_video_upstream.assemble(installed, upstream, target, cached_download, Path(temporary) / "downloads")
+        run([str(installed / executables["node"]), "verify.mjs"], installed,
+            dict(os.environ, PLAYWRIGHT_BROWSERS_PATH=str(installed / "browsers")))
     entry = {"url": f"https://github.com/haincbbg-coder/minmin-video-runtime/releases/download/{args.version}/{archive.name}",
-             "size": archive.stat().st_size, "sha256": hashlib.sha256(archive.read_bytes()).hexdigest()}
+             "size": archive.stat().st_size, "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(), "upstream": upstream}
     (out / (target + ".json")).write_text(json.dumps({"platform": target, "asset": entry,
         "components": catalog["components"], "version": args.version}, indent=2), "utf-8")
     print(json.dumps({"archive": str(archive), **entry}))
